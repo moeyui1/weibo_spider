@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 from scrapy.spiders import CrawlSpider
-from scrapy.http import Request
 import xlrd
 import scrapy
 from scrapy.selector import Selector
-
+from ..items import InformationItem
 
 class Spider2(CrawlSpider):
     name = "testSpider"
     host = "http://weibo.com"
-    list=[]
-    error_list=[]
+    list = []
+    error_list = []
+
 
     def init_data(self):
         namelist = []
@@ -27,14 +27,16 @@ class Spider2(CrawlSpider):
     def start_requests(self):
         print(self.init_data())
         for i in self.init_data():
-            yield scrapy.FormRequest("http://weibo.cn/search/", callback=self.parse, method='POST',meta={'keyword': i},
-                          formdata={'keyword': i, 'suser': "找人"})
+            yield scrapy.FormRequest("http://weibo.cn/search/", callback=self.parse, method='POST',
+                                     meta={'keyword': i},
+                                     formdata={'keyword': i, 'suser': "找人"})
 
     def parse(self, response):
-        # print(response.body)
-        s=Selector(response)
-        url=s.xpath("/html/body/table[1]/tr/td[1]/a[1]/@href").extract_first()
-        if url==None:
+        i=InformationItem()
+        i['NickName']=response.meta['keyword']
+        s = Selector(response)
+        url = s.xpath("/html/body/table[1]/tr/td[1]/a[1]/@href").extract_first()
+        if url == None:
             self.error_list.append(response.meta['keyword'])
         else:
             if url.startswith('/u/'):
@@ -42,8 +44,10 @@ class Spider2(CrawlSpider):
             else:
                 str = url[1:url.find("?")]
             self.list.append(str)
-
+            i["idname"]=str
+        yield i
 
     def close(spider, reason):
         print(spider.list)
         print(spider.error_list)
+

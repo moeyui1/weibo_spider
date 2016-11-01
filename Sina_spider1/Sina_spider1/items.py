@@ -18,6 +18,7 @@ class InformationItem(Item):
     Sex_Orientation = Field()  # 性取向
     Marriage = Field()  # 婚姻状况
     URL = Field()  # 首页链接
+    idname = Field()  # id 或别名
 
 
 class TweetsItem(Item):
