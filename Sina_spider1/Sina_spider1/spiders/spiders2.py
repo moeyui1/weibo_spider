@@ -12,9 +12,9 @@ class Spider2(CrawlSpider):
     error_list = []
 
 
-    def init_data(self):
+    def init_data(self,filename):
         namelist = []
-        wb = xlrd.open_workbook('./组织及个人统计.xls')  # 打开文件
+        wb = xlrd.open_workbook(filename)  # 打开文件
         sh = wb.sheet_by_index(0)
         try:
             for i in range(1, 1000):  # 跳过标题头
@@ -25,15 +25,19 @@ class Spider2(CrawlSpider):
         return namelist
 
     def start_requests(self):
-        print(self.init_data())
-        for i in self.init_data():
+        for i in self.init_data('./组织及个人统计.xls'):
             yield scrapy.FormRequest("http://weibo.cn/search/", callback=self.parse, method='POST',
-                                     meta={'keyword': i},
+                                     meta={'keyword': i,'type':"people"},
+                                     formdata={'keyword': i, 'suser': "找人"})
+        for i in self.init_data('./政府部门兼容版2.1.xls'):
+            yield scrapy.FormRequest("http://weibo.cn/search/", callback=self.parse, method='POST',
+                                     meta={'keyword': i,'type':"gov"},
                                      formdata={'keyword': i, 'suser': "找人"})
 
     def parse(self, response):
         i=InformationItem()
         i['NickName']=response.meta['keyword']
+        i['type']=response.meta["type"]
         s = Selector(response)
         url = s.xpath("/html/body/table[1]/tr/td[1]/a[1]/@href").extract_first()
         if url == None:

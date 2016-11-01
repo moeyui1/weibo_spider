@@ -11,12 +11,17 @@ class MongoDBPipleline(object):
         self.Tweets = db["Tweets"]
         self.Follows = db["Follows"]
         self.Fans = db["Fans"]
+        self.gov=db["Gov"]
 
     def process_item(self, item, spider):
         """ 判断item的类型，并作相应的处理，再入数据库 """
         if isinstance(item, InformationItem):
             try:
-                self.Information.save(dict(item))
+                if item["type"]!="gov":
+                    self.Information.save(dict(item))
+                else:
+                    self.gov.save(dict(item))
+
             except Exception:
                 pass
         elif isinstance(item, TweetsItem):
