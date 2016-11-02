@@ -19,7 +19,7 @@ class InformationItem(Item):
     Marriage = Field()  # 婚姻状况
     URL = Field()  # 首页链接
     idname = Field()  # id 或别名
-    type = Field() #类别
+    type = Field() # 类别
 
 
 class TweetsItem(Item):
