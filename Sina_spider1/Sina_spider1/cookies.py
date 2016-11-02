@@ -12,7 +12,9 @@ myWeiBo = [
     # {'no': '18795855882', 'psw': 'K485e07F1BD00A78'},
     {'no': 'eb3309595woshan@163.com', 'psw': 'h10WO7'},
     {'no': 'ia34581708liao@163.com', 'psw': 'BBI1N70mcYOZk9yY'},
-
+    {'no': 'e0010588bafen69@163.com', 'psw': 'tr578lg'},
+    # {'no': 'fg09296348kuan@163.com', 'psw': '3TEAAnw5JfBi'},
+    # {'no': 'q7968281nuozhang@163.com', 'psw': 'aEO1b4D'},
 ]
 
 

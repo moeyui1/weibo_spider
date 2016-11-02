@@ -2,6 +2,8 @@
 import re
 import datetime
 import logging
+
+import pymongo
 from scrapy.spiders import CrawlSpider
 from scrapy.selector import Selector
 from scrapy.http import Request
@@ -11,40 +13,57 @@ from ..items import InformationItem, TweetsItem, FollowsItem, FansItem
 class Spider(CrawlSpider):
     name = "sinaSpider"
     host = "http://weibo.cn"
-    start_urls = [
-    '5147637558']
+    start_urls = []
     scrawl_ID = set(start_urls)  # 记录待爬的微博ID
     finish_ID = set()  # 记录已爬的微博ID
 
     def start_requests(self):
-        while True:
-            ID = None
-            try:
-                ID = self.scrawl_ID.pop()
-            except KeyError as err:
-                logging.info('scrawl_ID has been empty.')
-                break
-            self.finish_ID.add(ID)  # 加入已爬队列
-            ID = str(ID)
-            follows = []
-            followsItems = FollowsItem()
-            followsItems["_id"] = ID
-            followsItems["follows"] = follows
-            fans = []
-            fansItems = FansItem()
-            fansItems["_id"] = ID
-            fansItems["fans"] = fans
+        gov_id = []
+        people_id = []
+        db = pymongo.MongoClient("localhost", 27017)['Sina']
+        for inf in db['Information'].find({"idname": {'$ne': None}}):
+            gov_id.append(inf['idname'])
+        for g_inf in db['Gov'].find({"idname": {'$ne': None}}):
+            people_id.append(g_inf['idname'])
+        # self.scrawl_ID = set(self.start_urls)  # 记录待爬的微博ID
 
-            url_follows = "http://weibo.cn/%s/follow" % ID
-            url_fans = "http://weibo.cn/%s/fans" % ID
-            url_tweets = "http://weibo.cn/%s?page=1" % ID
-            url_information0 = "http://weibo.cn/attgroup/opening?uid=%s" % ID
-            url_information="http://weibo.cn/%s" % ID
-            # yield Request(url=url_follows, meta={"item": followsItems, "result": follows},
-            #               callback=self.parse3)  # 去爬关注人
-            # yield Request(url=url_fans, meta={"item": fansItems, "result": fans}, callback=self.parse3)  # 去爬粉丝
-            yield Request(url=url_information, meta={"ID": ID}, callback=self.parse0)  # 去爬个人信息
-            yield Request(url=url_tweets, meta={"ID": ID}, callback=self.parse2)  # 去爬微博
+
+        # while True:
+        #     ID = None
+        #     try:
+        #         ID = self.scrawl_ID.pop()
+        #     except KeyError as err:
+        #         logging.info('scrawl_ID has been empty.')
+        #         break
+        #     self.finish_ID.add(ID)  # 加入已爬队列
+        #     ID = str(ID)
+        #     # follows = []
+        #     # followsItems = FollowsItem()
+        #     # followsItems["_id"] = ID
+        #     # followsItems["follows"] = follows
+        #     # fans = []
+        #     # fansItems = FansItem()
+        #     # fansItems["_id"] = ID
+        #     # fansItems["fans"] = fans
+        #
+        #     url_follows = "http://weibo.cn/%s/follow" % ID
+        #     url_fans = "http://weibo.cn/%s/fans" % ID
+        #     url_tweets = "http://weibo.cn/%s?page=1" % ID
+        #     url_information0 = "http://weibo.cn/attgroup/opening?uid=%s" % ID
+        #     url_information = "http://weibo.cn/%s" % ID
+        #     # yield Request(url=url_follows, meta={"item": followsItems, "result": follows},
+        #     #               callback=self.parse3)  # 去爬关注人
+        #     # yield Request(url=url_fans, meta={"item": fansItems, "result": fans}, callback=self.parse3)  # 去爬粉丝
+        #     # yield Request(url=url_information, meta={"ID": ID}, callback=self.parse0)  # 去爬个人信息
+        #     yield Request(url=url_tweets, meta={"ID": ID}, callback=self.parse2)  # 去爬微博
+
+        for r1 in gov_id:
+            url_tweets = "http://weibo.cn/%s?page=1" % r1
+            yield Request(url=url_tweets, meta={"ID": r1, "type": 'gov'}, callback=self.parse2)  # 去爬微博
+
+        for r2 in people_id:
+            url_tweets = "http://weibo.cn/%s?page=1" % r2
+            yield Request(url=url_tweets, meta={"ID": r2, "type": "people"}, callback=self.parse2)  # 去爬微博
 
     def parse0(self, response):
         """ 抓取个人信息1 """
@@ -123,8 +142,24 @@ class Spider(CrawlSpider):
             comment = re.findall(u'\u8bc4\u8bba\[(\d+)\]', tweet.extract())  # 评论数
             others = tweet.xpath('div/span[@class="ct"]/text()').extract_first()  # 求时间和使用工具（手机或平台）
 
+
+            if others:
+                others = others.split(u"\u6765\u81ea")
+                tweetsItems["PubTime"] = self.time_handler(others[0].strip())
+                if (tweetsItems["PubTime"] < self.settings["NOW"] - datetime.timedelta(days=365)):
+                    should_continue = False
+                    break  # 不需要晚于时间范围的数据，直接跳出
+                elif (tweetsItems["PubTime"] > self.settings["NOW"]):
+                    continue # 早于时间范围的数据，跳过此次循环
+                if len(others) == 2:
+                    tweetsItems["Tools"] = others[1]
+
             tweetsItems["ID"] = response.meta["ID"]
             tweetsItems["_id"] = response.meta["ID"] + "-" + id
+            tweetsItems["Type"] = response.meta["type"]
+            tweetsItems["AuthorID"] = id
+
+
             if content:
                 tweetsItems["Content"] = content.strip(u"[\u4f4d\u7f6e]")  # 去掉最后的"[位置]"
             if cooridinates:
@@ -137,18 +172,13 @@ class Spider(CrawlSpider):
                 tweetsItems["Transfer"] = int(transfer[0])
             if comment:
                 tweetsItems["Comment"] = int(comment[0])
-            if others:
-                others = others.split(u"\u6765\u81ea")
-                tweetsItems["PubTime"] = self.time_handler(others[0].strip())
-                if (tweetsItems["PubTime"] < self.settings["NOW"] - datetime.timedelta(days=365)):
-                    should_continue = False
-                if len(others) == 2:
-                    tweetsItems["Tools"] = others[1]
             yield tweetsItems
+
         url_next = selector.xpath(
             u'body/div[@class="pa" and @id="pagelist"]/form/div/a[text()="\u4e0b\u9875"]/@href').extract()
         if url_next and should_continue:
-            yield Request(url=self.host + url_next[0], meta={"ID": response.meta["ID"]}, callback=self.parse2)
+            yield Request(url=self.host + url_next[0], meta={"ID": response.meta["ID"], "type": response.meta["type"]},
+                          callback=self.parse2)
 
     def parse3(self, response):
         """ 抓取关注或粉丝 """
