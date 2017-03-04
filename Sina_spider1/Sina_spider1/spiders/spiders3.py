@@ -11,7 +11,7 @@ from ..items import InformationItem, TweetsItem, FollowsItem, FansItem
 
 
 class Spider(CrawlSpider):
-    name = "sinaSpider"
+    name = "pageSpider"
     host = "http://weibo.cn"
     start_urls = []
     scrawl_ID = set(start_urls)  # 记录待爬的微博ID
@@ -19,17 +19,24 @@ class Spider(CrawlSpider):
 
     def start_requests(self):
         db = pymongo.MongoClient("localhost", 27017)['Sina']
-        url_tweets = "http://weibo.cn/%s?page=%d"    # 这里定义页数
-
-        user_list = []
-        for i in db['Users'].find({"idname": "3915687504"}):
-            user_list.append(i['idname'])
-            if i.get('Crawled'):
+        url_tweets = "http://weibo.cn/%s?page=1800"
+        list = []
+        for i in db['Users'].find({}):
+            list.append(i['idname'])
+        for inf in db['Information'].find({"idname": {'$ne': None}}):
+            if inf['idname'] in list:
                 continue
-            yield Request(url=url_tweets % (i['idname'], 438), meta={'obj': i, 'page': 438},
-                          callback=self.parse2)
-
-
+            yield Request(url=url_tweets % inf['idname'],
+                          meta={"ID": inf['idname'], "type": 'people', "username": inf['NickName'], 'obj': inf,
+                                'page': 1800},
+                          callback=self.parse2)  # 去爬微博
+        for g_inf in db['Gov'].find({"idname": {'$ne': None}}):
+            if g_inf['idname'] in list:
+                continue
+            yield Request(url=url_tweets % g_inf['idname'],
+                          meta={"ID": g_inf['idname'], "type": 'gov', "username": g_inf['NickName'], 'obj': g_inf,
+                                'page': 1800},
+                          callback=self.parse2)  # 去爬微博
 
     def parse0(self, response):
         """ 抓取个人信息1 """
@@ -98,8 +105,6 @@ class Spider(CrawlSpider):
 
         selector = Selector(response)
         tweets = selector.xpath('body/div[@class="c" and @id]')
-        obj = response.meta['obj']
-
         for tweet in tweets:
             tweetsItems = TweetsItem()
             id = tweet.xpath('@id').extract_first()  # 微博ID
@@ -111,90 +116,50 @@ class Spider(CrawlSpider):
                 tweetsItems["PubTime"] = self.time_handler(others[0].strip())
                 if (tweetsItems["PubTime"] < self.settings["START_TIME"] - datetime.timedelta(days=365)):
                     should_continue = False
-                    obj = response.meta['obj']
-                    inf = InformationItem()
-                    inf['_id'] = obj.get("_id").strip()
-                    inf['NickName'] = obj.get("NickName").strip()
-                    inf['Start_page'] = obj.get("Start_page")
-                    inf['type'] = obj.get("type")
-                    inf['idname'] = obj.get("idname").strip()
-                    inf['Crawled'] = True
-                    yield inf
                     break  # 不需要晚于时间范围的数据，直接跳出
                 elif (tweetsItems["PubTime"] > self.settings["START_TIME"]):
                     continue  # 早于时间范围的数据，跳过此次循环
                 if len(others) == 2:
                     tweetsItems["Tools"] = others[1]
 
-            content = tweet.xpath('string(div/span[@class="ctt"])').extract_first()  # 微博内容
-            cooridinates = tweet.xpath('div/a/@href').extract_first()  # 定位坐标
-            like = re.findall(u'\u8d5e\[(\d+)\]', tweet.extract())  # 点赞数
-            transfer = re.findall(u'\u8f6c\u53d1\[(\d+)\]', tweet.extract())  # 转载数
-            comment = re.findall(u'\u8bc4\u8bba\[(\d+)\]', tweet.extract())  # 评论数
-
-            tweetsItems["ID"] = obj["idname"]
-            tweetsItems["_id"] = obj["idname"] + "-" + id
-            tweetsItems["Type"] = obj["type"]
-            tweetsItems["TID"] = id
-            tweetsItems["Username"] = obj['NickName']
-
-            if content:
-                tweetsItems["Content"] = content.strip(u"[\u4f4d\u7f6e]")  # 去掉最后的"[位置]"
-            if cooridinates:
-                cooridinates = re.findall('center=([\d|.|,]+)', cooridinates)
-                if cooridinates:
-                    tweetsItems["Co_oridinates"] = cooridinates[0]
-            if like:
-                tweetsItems["Like"] = int(like[len(like) - 1])
-            if transfer:
-                tweetsItems["Transfer"] = int(transfer[len(transfer) - 1])
-            if comment:
-                tweetsItems["Comment"] = int(comment[len(comment) - 1])
-
-            t_content = tweet.xpath('div/span[@class="cmt"]')
-            if t_content != []:
-                tweetsItems['Origin_Author_NickName'] = t_content.xpath('string(a)').extract_first()
-                tweetsItems['Transfer_reason'] = tweet.xpath('string(div[3])').extract_first()
-            yield tweetsItems
-
+            print(tweetsItems["PubTime"])
+            obj = response.meta['obj']
+            obj['Start_page'] = response.meta['page']
+            inf = InformationItem()
+            inf['_id'] = obj.get("_id").strip()
+            inf['NickName'] = obj.get("NickName").strip()
+            inf['Start_page'] = obj.get("Start_page")
+            inf['type'] = obj.get("type")
+            inf['idname'] = obj.get("idname").strip()
+            should_continue = False
+            yield inf
+            break
+            # yield tweetsItems
         url_next = selector.xpath(
             u'body/div[@class="pa" and @id="pagelist"]/form/div/a[text()="\u4e0b\u9875"]/@href').extract()
-        if url_next and should_continue:
+
+        if url_next and should_continue and response.meta['page'] < 2000:
             yield Request(url=self.host + "/%s?page=%d" % (response.meta['obj']['idname'], response.meta['page'] + 1),
                           meta={
-                              'obj': obj, 'page': response.meta['page'] + 1
+                              "ID": response.meta["ID"],
+                              "type": response.meta["type"],
+                              "username": response.meta["username"],
+                              'obj': response.meta['obj'],
+                              'page': response.meta['page'] + 1
                           }, callback=self.parse2)
         else:
             if not response.meta.get("retry"):
                 yield Request(url=self.host + "/%s?page=%d" % (response.meta['obj']['idname'], response.meta['page']),
                               meta={
+                                  "ID": response.meta["ID"],
+                                  "type": response.meta["type"],
+                                  "username": response.meta["username"],
                                   'obj': response.meta['obj'],
                                   'page': response.meta['page'],
                                   'retry': True
                               }, callback=self.parse2)
             else:
                 print(should_continue, "no more pages---------")
-
-    def parse3(self, response):
-        """ 抓取关注或粉丝 """
-        items = response.meta["item"]
-        selector = Selector(response)
-        text2 = selector.xpath(
-            u'body//table/tr/td/a[text()="\u5173\u6ce8\u4ed6" or text()="\u5173\u6ce8\u5979"]/@href').extract()
-        for elem in text2:
-            elem = re.findall('uid=(\d+)', elem)
-            if elem:
-                response.meta["result"].append(elem[0])
-                ID = int(elem[0])
-                if ID not in self.finish_ID:  # 新的ID，如果未爬则加入待爬队列
-                    self.scrawl_ID.add(ID)
-        url_next = selector.xpath(
-            u'body//div[@class="pa" and @id="pagelist"]/form/div/a[text()="\u4e0b\u9875"]/@href').extract()
-        if url_next:
-            yield Request(url=self.host + url_next[0], meta={"item": items, "result": response.meta["result"]},
-                          callback=self.parse3)
-        else:  # 如果没有下一页即获取完毕
-            yield items
 
     def time_handler(self, str):
         n = self.settings['NOW']

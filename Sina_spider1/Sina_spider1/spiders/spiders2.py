@@ -25,21 +25,23 @@ class Spider2(CrawlSpider):
         return namelist
 
     def start_requests(self):
-        for i in self.init_data('./组织及个人统计.xls'):
+        for i in self.init_data('./组织及个人统计2.0.xls'):
             yield scrapy.FormRequest("http://weibo.cn/search/", callback=self.parse, method='POST',
-                                     meta={'keyword': i, 'type': "people"},
-                                     formdata={'keyword': i, 'suser': "找人"})
+                                     meta={'keyword': i.strip(), 'type': "people"},
+                                     formdata={'keyword': i.strip(), 'suser': "找人"})
         for i in self.init_data('./政府部门兼容版2.1.xls'):
             yield scrapy.FormRequest("http://weibo.cn/search/", callback=self.parse, method='POST',
-                                     meta={'keyword': i, 'type': "gov"},
-                                     formdata={'keyword': i, 'suser': "找人"})
+                                     meta={'keyword': i.strip(), 'type': "gov"},
+                                     formdata={'keyword': i.strip(), 'suser': "找人"})
+
 
     def parse(self, response):
         i = InformationItem()
         i['NickName'] = response.meta['keyword']
         i['type'] = response.meta["type"]
         s = Selector(response)
-        url = s.xpath("/html/body/table[1]/tr/td[1]/a[1]/@href").extract_first()
+        url = s.xpath("/html/body/table/tr/td[2]/a[text()=\""+i['NickName']+"\"]/@href").extract_first()
+
         if url == None:
             self.error_list.append(response.meta['keyword'])
             i['_id'] = response.meta['keyword']
@@ -51,9 +53,8 @@ class Spider2(CrawlSpider):
             self.list.append(str)
             i["idname"] = str
             i['_id'] = response.meta['keyword'] + i['idname']
-
-        yield i
+            yield i
 
     def close(spider, reason):
-        print(spider.list)
-        print(spider.error_list)
+        # print(spider.list)
+        print('error_list:',spider.error_list)

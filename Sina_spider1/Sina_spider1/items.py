@@ -9,23 +9,27 @@ class InformationItem(Item):
     NickName = Field()  # 昵称
     Gender = Field()  # 性别
     Province = Field()  # 所在省
-    City = Field()  # 所在城市
-    Signature = Field()  # 个性签名
-    Birthday = Field()  # 生日
+    # City = Field()  # 所在城市
+    # Signature = Field()  # 个性签名
+    # Birthday = Field()  # 生日
     Num_Tweets = Field()  # 微博数
     Num_Follows = Field()  # 关注数
     Num_Fans = Field()  # 粉丝数
-    Sex_Orientation = Field()  # 性取向
-    Marriage = Field()  # 婚姻状况
+    # Sex_Orientation = Field()  # 性取向
+    # Marriage = Field()  # 婚姻状况
     URL = Field()  # 首页链接
     idname = Field()  # id 或别名
-    type = Field() # 类别
+    type = Field()  # 类别
+    Start_page=Field()
+    Crawled=Field() # 是否已经爬取过了
+
 
 
 class TweetsItem(Item):
     """ 微博信息 """
     _id = Field()  # 用户ID-微博ID
     ID = Field()  # 用户ID
+    Username = Field()
     Content = Field()  # 微博内容
     PubTime = Field()  # 发表时间
     Co_oridinates = Field()  # 定位坐标
@@ -34,8 +38,9 @@ class TweetsItem(Item):
     Comment = Field()  # 评论数
     Transfer = Field()  # 转载数
     Type = Field()
-    AuthorID=Field()
-
+    TID = Field()
+    Transfer_reason = Field()
+    Origin_Author_NickName = Field()  # 原作者的昵称
 
 class FollowsItem(Item):
     """ 关注人列表 """
